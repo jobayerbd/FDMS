@@ -33,6 +33,8 @@ export function PumpManagement() {
   const [stocks, setStocks] = useState<Record<string, FuelStock[]>>({});
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingPumpId, setEditingPumpId] = useState<string | null>(null);
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState(false);
@@ -43,7 +45,7 @@ export function PumpManagement() {
   const [loadingHistory, setLoadingHistory] = useState<FuelLoading[]>([]);
 
   // Form states
-  const [pumpForm, setPumpForm] = useState({ name: '', location: '', owner: '', contact: '' });
+  const [pumpForm, setPumpForm] = useState({ name: '', location: '', owner: '', contact: '', latitude: 24.3167, longitude: 89.7833 });
   const [stockForm, setStockForm] = useState({ fuelType: 'Octane', amount: 0 });
   const [userForm, setUserForm] = useState({ role: 'operator' as 'admin' | 'pumpOwner' | 'operator', assignedPumpId: '' });
   const [addStaffForm, setAddStaffForm] = useState({ email: '', name: '', role: 'operator' as 'admin' | 'pumpOwner' | 'operator', assignedPumpId: '' });
@@ -87,9 +89,15 @@ export function PumpManagement() {
     if (profile?.role !== 'admin') return;
     setLoading(true);
     try {
-      await addDoc(collection(db, 'pumps'), pumpForm);
+      if (isEditing && editingPumpId) {
+        await updateDoc(doc(db, 'pumps', editingPumpId), pumpForm);
+      } else {
+        await addDoc(collection(db, 'pumps'), pumpForm);
+      }
       setIsModalOpen(false);
-      setPumpForm({ name: '', location: '', owner: '', contact: '' });
+      setIsEditing(false);
+      setEditingPumpId(null);
+      setPumpForm({ name: '', location: '', owner: '', contact: '', latitude: 24.3167, longitude: 89.7833 });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'pumps');
     } finally {
@@ -192,7 +200,8 @@ export function PumpManagement() {
   };
 
   const handleDeleteUser = async (uid: string) => {
-    if (profile?.role !== 'admin') return;
+    const isAuthorized = profile?.role === 'admin' || profile?.role === 'pumpOwner';
+    if (!isAuthorized) return;
     if (!confirm('Remove this staff member?')) return;
     try {
       await deleteDoc(doc(db, 'users', uid));
@@ -226,7 +235,12 @@ export function PumpManagement() {
         </div>
         {profile?.role === 'admin' && (
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setIsEditing(false);
+              setEditingPumpId(null);
+              setPumpForm({ name: '', location: '', owner: '', contact: '', latitude: 24.3167, longitude: 89.7833 });
+              setIsModalOpen(true);
+            }}
             className="bg-blue-600 text-white p-2 rounded-xl shadow-lg shadow-blue-100 active:scale-95 transition-transform"
           >
             <Plus className="h-4 w-4" />
@@ -251,9 +265,21 @@ export function PumpManagement() {
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-slate-900 leading-tight">{pump.name}</h3>
-                    <div className="flex items-center gap-1 text-slate-400 text-[9px] font-bold">
-                      <MapPin className="h-2.5 w-2.5" />
-                      {pump.location}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 text-slate-400 text-[9px] font-bold">
+                        <MapPin className="h-2.5 w-2.5" />
+                        {pump.location}
+                      </div>
+                      {pump.latitude && pump.longitude && (
+                        <a 
+                          href={`https://www.google.com/maps/search/?api=1&query=${pump.latitude},${pump.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[8px] font-black text-blue-600 uppercase hover:underline"
+                        >
+                          View Map
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -268,6 +294,26 @@ export function PumpManagement() {
                   >
                     <History className="h-4 w-4" />
                   </button>
+                  {profile?.role === 'admin' && (
+                    <button 
+                      onClick={() => {
+                        setIsEditing(true);
+                        setEditingPumpId(pump.id);
+                        setPumpForm({
+                          name: pump.name,
+                          location: pump.location,
+                          owner: pump.owner || '',
+                          contact: pump.contact || '',
+                          latitude: pump.latitude || 24.3167,
+                          longitude: pump.longitude || 89.7833
+                        });
+                        setIsModalOpen(true);
+                      }}
+                      className="p-1.5 text-slate-300 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                  )}
                   <button 
                     onClick={() => { setSelectedPump(pump); setIsStockModalOpen(true); }}
                     className="p-1.5 text-slate-300 hover:text-blue-600 transition-colors"
@@ -318,9 +364,17 @@ export function PumpManagement() {
       <div className="px-2 space-y-3 mt-6">
         <div className="flex items-center justify-between px-2">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Staff Management</h3>
-          {profile?.role === 'admin' && (
+          {(profile?.role === 'admin' || (profile?.role === 'pumpOwner' && profile.assignedPumpId)) && (
             <button 
-              onClick={() => setIsAddStaffModalOpen(true)}
+              onClick={() => {
+                setAddStaffForm({
+                  email: '',
+                  name: '',
+                  role: profile?.role === 'pumpOwner' ? 'operator' : 'operator',
+                  assignedPumpId: profile?.role === 'pumpOwner' ? profile.assignedPumpId! : ''
+                });
+                setIsAddStaffModalOpen(true);
+              }}
               className="flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase bg-blue-50 px-2 py-1 rounded-lg"
             >
               <UserPlus className="h-2.5 w-2.5" /> Add Staff
@@ -376,7 +430,7 @@ export function PumpManagement() {
                 >
                   <Edit2 className="h-3.5 w-3.5" />
                 </button>
-                {profile?.role === 'admin' && (
+                {(profile?.role === 'admin' || (profile?.role === 'pumpOwner' && u.role === 'operator' && u.assignedPumpId === profile.assignedPumpId)) && (
                   <button 
                     onClick={() => handleDeleteUser(u.uid)}
                     className="p-2 text-slate-300 hover:text-red-600 transition-colors"
@@ -406,7 +460,7 @@ export function PumpManagement() {
               className="bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden"
             >
               <div className="p-5 border-b border-slate-50 flex items-center justify-between">
-                <h3 className="text-base font-black text-slate-900">Register Pump</h3>
+                <h3 className="text-base font-black text-slate-900">{isEditing ? 'Edit Pump' : 'Register Pump'}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="text-slate-300">
                   <X className="h-5 w-5" />
                 </button>
@@ -423,15 +477,41 @@ export function PumpManagement() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Location</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Location Name</label>
                   <input 
                     required
                     type="text"
                     value={pumpForm.location}
                     onChange={e => setPumpForm({ ...pumpForm, location: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-sm font-bold"
+                    placeholder="e.g. Islampur Bazar"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Latitude</label>
+                    <input 
+                      type="number"
+                      step="any"
+                      value={pumpForm.latitude}
+                      onChange={e => setPumpForm({ ...pumpForm, latitude: parseFloat(e.target.value) })}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-sm font-bold"
+                      placeholder="24.3167"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Longitude</label>
+                    <input 
+                      type="number"
+                      step="any"
+                      value={pumpForm.longitude}
+                      onChange={e => setPumpForm({ ...pumpForm, longitude: parseFloat(e.target.value) })}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-sm font-bold"
+                      placeholder="89.7833"
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Owner</label>
@@ -458,7 +538,7 @@ export function PumpManagement() {
                   className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                  Register Pump
+                  {isEditing ? 'Update Pump' : 'Register Pump'}
                 </button>
               </form>
             </motion.div>
@@ -572,35 +652,47 @@ export function PumpManagement() {
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Role</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {['pumpOwner', 'operator'].map(role => (
-                      <button
-                        key={role}
-                        type="button"
-                        onClick={() => setAddStaffForm({ ...addStaffForm, role: role as any })}
-                        className={cn(
-                          "py-2.5 rounded-xl border-2 text-[10px] font-black transition-all",
-                          addStaffForm.role === role 
-                            ? "bg-blue-600 border-blue-600 text-white" 
-                            : "bg-slate-50 border-transparent text-slate-500"
-                        )}
-                      >
-                        {role === 'pumpOwner' ? 'Pump Owner' : 'Operator'}
-                      </button>
-                    ))}
+                    {profile?.role === 'admin' ? (
+                      ['pumpOwner', 'operator'].map(role => (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => setAddStaffForm({ ...addStaffForm, role: role as any })}
+                          className={cn(
+                            "py-2.5 rounded-xl border-2 text-[10px] font-black transition-all",
+                            addStaffForm.role === role 
+                              ? "bg-blue-600 border-blue-600 text-white" 
+                              : "bg-slate-50 border-transparent text-slate-500"
+                          )}
+                        >
+                          {role === 'pumpOwner' ? 'Pump Owner' : 'Operator'}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="py-2.5 px-4 rounded-xl bg-slate-50 border-2 border-transparent text-[10px] font-black text-slate-500">
+                        Operator
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Assign to Pump</label>
-                  <select 
-                    value={addStaffForm.assignedPumpId}
-                    onChange={e => setAddStaffForm({ ...addStaffForm, assignedPumpId: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-sm font-bold"
-                  >
-                    <option value="">No Assignment</option>
-                    {pumps.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                  {profile?.role === 'admin' ? (
+                    <select 
+                      value={addStaffForm.assignedPumpId}
+                      onChange={e => setAddStaffForm({ ...addStaffForm, assignedPumpId: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-sm font-bold"
+                    >
+                      <option value="">No Assignment</option>
+                      {pumps.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="py-3 px-4 rounded-xl bg-slate-50 border-2 border-transparent text-sm font-bold text-slate-500">
+                      {pumps.find(p => p.id === profile?.assignedPumpId)?.name || 'Your Pump'}
+                    </div>
+                  )}
                 </div>
                 <button 
                   disabled={loading}

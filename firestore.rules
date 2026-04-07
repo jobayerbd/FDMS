@@ -104,6 +104,8 @@ service cloud.firestore {
     function isValidPump(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
              data.location is string && data.location.size() > 0 && data.location.size() < 500 &&
+             (!('latitude' in data) || data.latitude is number) &&
+             (!('longitude' in data) || data.longitude is number) &&
              (!('owner' in data) || (data.owner is string && data.owner.size() < 100)) &&
              (!('contact' in data) || (data.contact is string && data.contact.size() < 50));
     }
@@ -135,13 +137,19 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isOwner(userId) || 
+        isAdmin() ||
+        (isPumpOwner() && request.resource.data.role == 'operator' && request.resource.data.assignedPumpId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId)
+      );
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
         isAdmin() || 
         (isOwner(userId) && request.resource.data.role == resource.data.role) ||
         (isPumpOwner() && resource.data.role == 'operator' && request.resource.data.role == 'operator' && request.resource.data.assignedPumpId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId)
       );
-      allow delete: if isAdmin() || (isAuthenticated() && request.auth.token.email == userId);
+      allow delete: if isAdmin() || 
+                    (isAuthenticated() && request.auth.token.email == userId) ||
+                    (isPumpOwner() && resource.data.role == 'operator' && resource.data.assignedPumpId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId);
     }
 
     match /pumps/{pumpId} {

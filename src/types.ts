@@ -2,6 +2,8 @@ export interface Pump {
   id: string;
   name: string;
   location: string;
+  latitude?: number;
+  longitude?: number;
   owner?: string;
   contact?: string;
 }

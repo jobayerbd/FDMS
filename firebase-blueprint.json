@@ -19,6 +19,8 @@
       "properties": {
         "name": { "type": "string" },
         "location": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
         "owner": { "type": "string" },
         "contact": { "type": "string" }
       },
