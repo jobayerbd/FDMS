@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, setDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, setDoc, getDocs, serverTimestamp, query, orderBy, limit, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { Pump, FuelStock, UserProfile } from '../types';
+import { Pump, FuelStock, UserProfile, FuelLoading } from '../types';
 import { useAuth } from '../App';
 import { 
   Plus, 
@@ -19,10 +19,13 @@ import {
   Settings,
   Users,
   ShieldCheck,
-  UserPlus
+  UserPlus,
+  History,
+  ArrowDownCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { format } from 'date-fns';
 
 export function PumpManagement() {
   const { profile } = useAuth();
@@ -33,9 +36,11 @@ export function PumpManagement() {
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState(false);
+  const [isLoadingHistoryOpen, setIsLoadingHistoryOpen] = useState(false);
   const [selectedPump, setSelectedPump] = useState<Pump | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState<FuelLoading[]>([]);
 
   // Form states
   const [pumpForm, setPumpForm] = useState({ name: '', location: '', owner: '', contact: '' });
@@ -94,7 +99,7 @@ export function PumpManagement() {
 
   const handleUpdateStock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPump) return;
+    if (!selectedPump || !profile) return;
     // Both admin and pumpOwner can update stock
     setLoading(true);
     try {
@@ -114,6 +119,16 @@ export function PumpManagement() {
           currentStock: stockForm.amount
         });
       }
+
+      // Log the loading transaction
+      await addDoc(collection(db, 'loadings'), {
+        pumpId: selectedPump.id,
+        fuelType: stockForm.fuelType,
+        amount: stockForm.amount,
+        timestamp: serverTimestamp(),
+        addedBy: profile.uid
+      });
+
       setIsStockModalOpen(false);
       setStockForm({ fuelType: 'Octane', amount: 0 });
     } catch (error) {
@@ -121,6 +136,19 @@ export function PumpManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchLoadingHistory = (pumpId: string) => {
+    const q = query(
+      collection(db, 'loadings'),
+      where('pumpId', '==', pumpId),
+      orderBy('timestamp', 'desc'),
+      limit(20)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+      setLoadingHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FuelLoading)));
+    });
   };
 
   const handleUpdateUser = async (e: React.FormEvent) => {
@@ -230,6 +258,16 @@ export function PumpManagement() {
                   </div>
                 </div>
                 <div className="flex gap-1">
+                  <button 
+                    onClick={() => {
+                      setSelectedPump(pump);
+                      setIsLoadingHistoryOpen(true);
+                      fetchLoadingHistory(pump.id);
+                    }}
+                    className="p-1.5 text-slate-300 hover:text-blue-600 transition-colors"
+                  >
+                    <History className="h-4 w-4" />
+                  </button>
                   <button 
                     onClick={() => { setSelectedPump(pump); setIsStockModalOpen(true); }}
                     className="p-1.5 text-slate-300 hover:text-blue-600 transition-colors"
@@ -573,6 +611,57 @@ export function PumpManagement() {
                   Add Staff Member
                 </button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Loading History Modal */}
+      <AnimatePresence>
+        {isLoadingHistoryOpen && (
+          <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="p-5 border-b border-slate-50 flex items-center justify-between shrink-0">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Loading History</h3>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{selectedPump?.name}</p>
+                </div>
+                <button onClick={() => setIsLoadingHistoryOpen(false)} className="text-slate-300">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {loadingHistory.length === 0 ? (
+                  <div className="text-center py-10">
+                    <History className="h-10 w-10 text-slate-100 mx-auto mb-2" />
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No loading history yet</p>
+                  </div>
+                ) : (
+                  loadingHistory.map((load) => (
+                    <div key={load.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-white p-2 rounded-xl shadow-sm">
+                          <ArrowDownCircle className="h-4 w-4 text-emerald-500" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black text-slate-900 leading-none">{load.fuelType}</p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">
+                            {load.timestamp?.toDate ? format(load.timestamp.toDate(), 'MMM d, h:mm a') : 'Just now'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-black text-emerald-600">+{load.amount}L</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </motion.div>
           </div>
         )}

@@ -36,7 +36,10 @@ export function TransactionLogging() {
   const [vehicleHistoryTotal, setVehicleHistoryTotal] = useState<number>(0);
   const [isCheckingHistory, setIsCheckingHistory] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isKeypadOpen, setIsKeypadOpen] = useState(false);
+  const [keypadConfig, setKeypadConfig] = useState<{ isOpen: boolean, field: 'quantity' | 'vehicleNumber' }>({
+    isOpen: false,
+    field: 'quantity'
+  });
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -191,14 +194,16 @@ export function TransactionLogging() {
   const quickQuantities = [5, 10, 20, 50];
 
   const handleKeypadPress = (val: string) => {
+    const field = keypadConfig.field;
     if (val === 'backspace') {
-      setForm(prev => ({ ...prev, quantity: prev.quantity.slice(0, -1) }));
+      setForm(prev => ({ ...prev, [field]: prev[field].slice(0, -1) }));
     } else if (val === '.') {
-      if (!form.quantity.includes('.')) {
+      if (field === 'quantity' && !form.quantity.includes('.')) {
         setForm(prev => ({ ...prev, quantity: prev.quantity + '.' }));
       }
+      // Vehicle number usually doesn't have dots, but we can allow it if needed or ignore
     } else {
-      setForm(prev => ({ ...prev, quantity: prev.quantity + val }));
+      setForm(prev => ({ ...prev, [field]: prev[field] + val }));
     }
   };
 
@@ -258,13 +263,22 @@ export function TransactionLogging() {
               </div>
             )}
           </div>
-          <input 
-            type="text"
-            placeholder="REG NUMBER"
-            value={form.vehicleNumber}
-            onChange={e => setForm({ ...form, vehicleNumber: e.target.value })}
-            className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all font-mono text-base font-black uppercase placeholder:text-slate-200 text-slate-900"
-          />
+          <div className="relative">
+            <input 
+              type="text"
+              placeholder="REG NUMBER"
+              value={form.vehicleNumber}
+              onChange={e => setForm({ ...form, vehicleNumber: e.target.value })}
+              className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all font-mono text-base font-black uppercase placeholder:text-slate-200 text-slate-900"
+            />
+            <button 
+              type="button"
+              onClick={() => setKeypadConfig({ isOpen: true, field: 'vehicleNumber' })}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-lg shadow-sm border border-slate-100 text-blue-600 active:scale-90 transition-transform"
+            >
+              <Calculator className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Fuel Type Chips - Compact */}
@@ -306,7 +320,7 @@ export function TransactionLogging() {
             <div className="absolute right-12 top-1/2 -translate-y-1/2 text-slate-300 font-black text-lg">L</div>
             <button 
               type="button"
-              onClick={() => setIsKeypadOpen(true)}
+              onClick={() => setKeypadConfig({ isOpen: true, field: 'quantity' })}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-lg shadow-sm border border-slate-100 text-blue-600 active:scale-90 transition-transform"
             >
               <Calculator className="h-5 w-5" />
@@ -400,7 +414,7 @@ export function TransactionLogging() {
       </div>
       {/* Numeric Keypad Modal */}
       <AnimatePresence>
-        {isKeypadOpen && (
+        {keypadConfig.isOpen && (
           <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm p-0">
             <motion.div 
               initial={{ y: '100%' }}
@@ -410,11 +424,16 @@ export function TransactionLogging() {
             >
               <div className="flex justify-between items-center mb-6">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Input Quantity</span>
-                  <span className="text-3xl font-black text-blue-600">{form.quantity || '0'}<span className="text-slate-300 ml-1">L</span></span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Input {keypadConfig.field === 'quantity' ? 'Quantity' : 'Vehicle Number'}
+                  </span>
+                  <span className="text-3xl font-black text-blue-600">
+                    {form[keypadConfig.field] || (keypadConfig.field === 'quantity' ? '0' : '---')}
+                    {keypadConfig.field === 'quantity' && <span className="text-slate-300 ml-1">L</span>}
+                  </span>
                 </div>
                 <button 
-                  onClick={() => setIsKeypadOpen(false)}
+                  onClick={() => setKeypadConfig(prev => ({ ...prev, isOpen: false }))}
                   className="p-3 bg-slate-50 rounded-2xl text-slate-400 active:scale-95 transition-transform"
                 >
                   <X className="h-6 w-6" />
@@ -422,25 +441,28 @@ export function TransactionLogging() {
               </div>
 
               <div className="grid grid-cols-3 gap-3">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0, 'backspace'].map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => handleKeypadPress(key.toString())}
-                    className={cn(
-                      "h-16 rounded-2xl flex items-center justify-center text-xl font-black transition-all active:scale-95",
-                      key === 'backspace' 
-                        ? "bg-red-50 text-red-500" 
-                        : "bg-slate-50 text-slate-900 hover:bg-slate-100"
-                    )}
-                  >
-                    {key === 'backspace' ? <Delete className="h-6 w-6" /> : key}
-                  </button>
-                ))}
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, keypadConfig.field === 'quantity' ? '.' : '', 0, 'backspace'].map((key, idx) => {
+                  if (key === '' && keypadConfig.field === 'vehicleNumber') return <div key={`empty-${idx}`} />;
+                  return (
+                    <button
+                      key={key || `key-${idx}`}
+                      type="button"
+                      onClick={() => handleKeypadPress(key.toString())}
+                      className={cn(
+                        "h-16 rounded-2xl flex items-center justify-center text-xl font-black transition-all active:scale-95",
+                        key === 'backspace' 
+                          ? "bg-red-50 text-red-500" 
+                          : "bg-slate-50 text-slate-900 hover:bg-slate-100"
+                      )}
+                    >
+                      {key === 'backspace' ? <Delete className="h-6 w-6" /> : key}
+                    </button>
+                  );
+                })}
               </div>
 
               <button 
-                onClick={() => setIsKeypadOpen(false)}
+                onClick={() => setKeypadConfig(prev => ({ ...prev, isOpen: false }))}
                 className="w-full mt-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-base shadow-xl shadow-blue-100 active:scale-[0.98] transition-all"
               >
                 Done

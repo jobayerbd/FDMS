@@ -161,6 +161,16 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidTransaction(request.resource.data) && isStaff(request.resource.data.pumpId);
     }
 
+    match /loadings/{loadingId} {
+      allow read: if isAuthenticated() && (isAdmin() || ownsPump(request.resource.data.pumpId) || ownsPump(resource.data.pumpId));
+      allow create: if (isAdmin() || ownsPump(request.resource.data.pumpId)) && 
+                    request.resource.data.fuelType in ['Octane', 'Petrol', 'Diesel'] &&
+                    request.resource.data.amount is number && request.resource.data.amount > 0 &&
+                    request.resource.data.pumpId is string &&
+                    request.resource.data.addedBy == request.auth.uid &&
+                    request.resource.data.timestamp is timestamp;
+    }
+
     match /vehicles/{vehicleNumber} {
       allow read: if true;
       allow create, update: if isAuthenticated() && isValidVehicle(request.resource.data);

@@ -60,6 +60,19 @@
         "lastTransactionAt": { "type": "string", "format": "date-time" }
       },
       "required": ["vehicleNumber"]
+    },
+    "FuelLoading": {
+      "title": "Fuel Loading",
+      "description": "Record of fuel loaded into a pump's stock",
+      "type": "object",
+      "properties": {
+        "pumpId": { "type": "string" },
+        "fuelType": { "type": "string", "enum": ["Octane", "Petrol", "Diesel"] },
+        "amount": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "addedBy": { "type": "string" }
+      },
+      "required": ["pumpId", "fuelType", "amount", "timestamp", "addedBy"]
     }
   },
   "firestore": {
@@ -78,6 +91,10 @@
     "/transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "All fuel transactions"
+    },
+    "/loadings/{loadingId}": {
+      "schema": "FuelLoading",
+      "description": "Fuel loading history for pumps"
     },
     "/vehicles/{vehicleNumber}": {
       "schema": "Vehicle",

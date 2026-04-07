@@ -30,6 +30,15 @@ export interface Vehicle {
   lastTransactionAt: any;
 }
 
+export interface FuelLoading {
+  id: string;
+  pumpId: string;
+  fuelType: 'Octane' | 'Petrol' | 'Diesel';
+  amount: number;
+  timestamp: any;
+  addedBy: string;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
