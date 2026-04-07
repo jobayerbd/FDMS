@@ -6,7 +6,7 @@
       "type": "object",
       "properties": {
         "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "enum": ["admin", "pumpOwner", "operator"] },
+        "role": { "type": "string", "enum": ["admin", "pumpOwner", "operator", "user"] },
         "assignedPumpId": { "type": "string", "description": "ID of the pump assigned to the owner or operator" },
         "name": { "type": "string" }
       },

@@ -9,7 +9,7 @@ service cloud.firestore {
     // Collection: users
     // Fields:
     //   - email: string (required)
-    //   - role: string (required, 'admin' or 'operator')
+    //   - role: string (required, 'admin', 'pumpOwner', 'operator', or 'user')
     //   - assignedPumpId: string (optional)
     //   - name: string (optional)
     //
@@ -95,7 +95,7 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return data.email is string && isValidEmail(data.email) &&
-             data.role in ['admin', 'pumpOwner', 'operator'] &&
+             data.role in ['admin', 'pumpOwner', 'operator', 'user'] &&
              (!('assignedPumpId' in data) || data.assignedPumpId is string || data.assignedPumpId == null) &&
              (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
              (!('isPreAssigned' in data) || data.isPreAssigned is bool);
@@ -138,14 +138,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
-        isOwner(userId) || 
+        (isOwner(userId) && (request.resource.data.role == 'user' || (request.auth.token.email == "op.jobayer@gmail.com" && request.resource.data.role == 'admin'))) || 
         isAdmin() ||
-        (isPumpOwner() && request.resource.data.role == 'operator' && request.resource.data.assignedPumpId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId)
+        (isPumpOwner() && (request.resource.data.role == 'operator' || request.resource.data.role == 'user'))
       );
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
         isAdmin() || 
         (isOwner(userId) && request.resource.data.role == resource.data.role) ||
-        (isPumpOwner() && resource.data.role == 'operator' && request.resource.data.role == 'operator' && request.resource.data.assignedPumpId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId)
+        (isPumpOwner() && 
+          (resource.data.role == 'operator' || resource.data.role == 'user') && 
+          (request.resource.data.role == 'operator' || request.resource.data.role == 'user') &&
+          (request.resource.data.assignedPumpId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId || request.resource.data.assignedPumpId == null)
+        )
       );
       allow delete: if isAdmin() || 
                     (isAuthenticated() && request.auth.token.email == userId) ||

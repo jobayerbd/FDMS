@@ -47,8 +47,8 @@ export function PumpManagement() {
   // Form states
   const [pumpForm, setPumpForm] = useState({ name: '', location: '', owner: '', contact: '', latitude: 24.3167, longitude: 89.7833 });
   const [stockForm, setStockForm] = useState({ fuelType: 'Octane', amount: 0 });
-  const [userForm, setUserForm] = useState({ role: 'operator' as 'admin' | 'pumpOwner' | 'operator', assignedPumpId: '' });
-  const [addStaffForm, setAddStaffForm] = useState({ email: '', name: '', role: 'operator' as 'admin' | 'pumpOwner' | 'operator', assignedPumpId: '' });
+  const [userForm, setUserForm] = useState({ role: 'user' as 'admin' | 'pumpOwner' | 'operator' | 'user', assignedPumpId: '' });
+  const [addStaffForm, setAddStaffForm] = useState({ email: '', name: '', role: 'operator' as 'admin' | 'pumpOwner' | 'operator' | 'user', assignedPumpId: '' });
 
   useEffect(() => {
     const unsubPumps = onSnapshot(collection(db, 'pumps'), (snapshot) => {
@@ -385,8 +385,8 @@ export function PumpManagement() {
           {users.filter(u => {
             if (profile?.role === 'admin') return true;
             if (profile?.role === 'pumpOwner') {
-              // Show operators assigned to their pump
-              return u.role === 'operator' && u.assignedPumpId === profile.assignedPumpId;
+              // Show operators assigned to their pump AND any normal users (so they can promote them to operators)
+              return (u.role === 'operator' && u.assignedPumpId === profile.assignedPumpId) || u.role === 'user';
             }
             return false;
           }).map((u) => (
@@ -402,7 +402,8 @@ export function PumpManagement() {
                       "text-[7px] font-black uppercase px-1.5 py-0.5 rounded-md",
                       u.role === 'admin' ? "bg-red-50 text-red-600" :
                       u.role === 'pumpOwner' ? "bg-blue-50 text-blue-600" :
-                      "bg-slate-50 text-slate-600"
+                      u.role === 'operator' ? "bg-slate-50 text-slate-600" :
+                      "bg-amber-50 text-amber-600"
                     )}>
                       {u.role}
                     </span>
@@ -779,25 +780,44 @@ export function PumpManagement() {
                 </button>
               </div>
               <form onSubmit={handleUpdateUser} className="p-5 space-y-4">
-                {profile?.role === 'admin' && (
+                {(profile?.role === 'admin' || profile?.role === 'pumpOwner') && (
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Role</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {['admin', 'pumpOwner', 'operator'].map(role => (
-                        <button
-                          key={role}
-                          type="button"
-                          onClick={() => setUserForm({ ...userForm, role: role as any })}
-                          className={cn(
-                            "py-2.5 rounded-xl border-2 text-[10px] font-black transition-all",
-                            userForm.role === role 
-                              ? "bg-blue-600 border-blue-600 text-white" 
-                              : "bg-slate-50 border-transparent text-slate-500"
-                          )}
-                        >
-                          {role}
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-2 gap-2">
+                      {profile?.role === 'admin' ? (
+                        ['admin', 'pumpOwner', 'operator', 'user'].map(role => (
+                          <button
+                            key={role}
+                            type="button"
+                            onClick={() => setUserForm({ ...userForm, role: role as any })}
+                            className={cn(
+                              "py-2.5 rounded-xl border-2 text-[10px] font-black transition-all",
+                              userForm.role === role 
+                                ? "bg-blue-600 border-blue-600 text-white" 
+                                : "bg-slate-50 border-transparent text-slate-500"
+                            )}
+                          >
+                            {role}
+                          </button>
+                        ))
+                      ) : (
+                        // Pump Owner can only set role to operator or user
+                        ['operator', 'user'].map(role => (
+                          <button
+                            key={role}
+                            type="button"
+                            onClick={() => setUserForm({ ...userForm, role: role as any })}
+                            className={cn(
+                              "py-2.5 rounded-xl border-2 text-[10px] font-black transition-all",
+                              userForm.role === role 
+                                ? "bg-blue-600 border-blue-600 text-white" 
+                                : "bg-slate-50 border-transparent text-slate-500"
+                            )}
+                          >
+                            {role}
+                          </button>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}

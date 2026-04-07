@@ -25,7 +25,7 @@ testConnection();
 interface UserProfile {
   uid: string;
   email: string;
-  role: 'admin' | 'pumpOwner' | 'operator';
+  role: 'admin' | 'pumpOwner' | 'operator' | 'user';
   assignedPumpId?: string;
   name?: string;
   isPreAssigned?: boolean;
@@ -89,7 +89,7 @@ export default function App() {
               const isAdmin = firebaseUser.email === 'op.jobayer@gmail.com';
               const newProfile: Omit<UserProfile, 'uid'> = {
                 email: firebaseUser.email!,
-                role: isAdmin ? 'admin' : 'operator',
+                role: isAdmin ? 'admin' : 'user',
                 name: firebaseUser.displayName || '',
               };
               await setDoc(uidRef, newProfile);

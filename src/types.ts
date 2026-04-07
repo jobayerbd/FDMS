@@ -44,7 +44,7 @@ export interface FuelLoading {
 export interface UserProfile {
   uid: string;
   email: string;
-  role: 'admin' | 'pumpOwner' | 'operator';
+  role: 'admin' | 'pumpOwner' | 'operator' | 'user';
   assignedPumpId?: string;
   name?: string;
   isPreAssigned?: boolean;
