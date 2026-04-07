@@ -1,0 +1,5 @@
+{
+  "name": "Fuel Distribution Monitoring System (FDMS)",
+  "description": "A centralized digital system to monitor, control, and ensure transparency in fuel distribution across petrol pumps in Islampur Thana.",
+  "requestFramePermissions": []
+}

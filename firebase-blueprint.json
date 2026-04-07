@@ -1,0 +1,87 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user with roles (Admin, Pump Owner, or Pump Operator)",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "pumpOwner", "operator"] },
+        "assignedPumpId": { "type": "string", "description": "ID of the pump assigned to the owner or operator" },
+        "name": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "Pump": {
+      "title": "Pump",
+      "description": "Petrol pump details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "owner": { "type": "string" },
+        "contact": { "type": "string" }
+      },
+      "required": ["name", "location"]
+    },
+    "FuelStock": {
+      "title": "Fuel Stock",
+      "description": "Stock levels for a specific fuel type at a pump",
+      "type": "object",
+      "properties": {
+        "pumpId": { "type": "string" },
+        "fuelType": { "type": "string", "enum": ["Octane", "Petrol", "Diesel"] },
+        "totalReceived": { "type": "number" },
+        "currentStock": { "type": "number" }
+      },
+      "required": ["pumpId", "fuelType", "currentStock"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Fuel distribution record",
+      "type": "object",
+      "properties": {
+        "vehicleNumber": { "type": "string" },
+        "fuelType": { "type": "string", "enum": ["Octane", "Petrol", "Diesel"] },
+        "quantity": { "type": "number" },
+        "pumpId": { "type": "string" },
+        "operatorId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vehicleNumber", "fuelType", "quantity", "pumpId", "timestamp"]
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Aggregated fuel data for a vehicle",
+      "type": "object",
+      "properties": {
+        "vehicleNumber": { "type": "string" },
+        "totalFuelTaken": { "type": "number" },
+        "lastTransactionAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["vehicleNumber"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and roles"
+    },
+    "/pumps/{pumpId}": {
+      "schema": "Pump",
+      "description": "Registered petrol pumps"
+    },
+    "/pumps/{pumpId}/stocks/{stockId}": {
+      "schema": "FuelStock",
+      "description": "Fuel stock levels per pump"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "All fuel transactions"
+    },
+    "/vehicles/{vehicleNumber}": {
+      "schema": "Vehicle",
+      "description": "Vehicle tracking data"
+    }
+  }
+}

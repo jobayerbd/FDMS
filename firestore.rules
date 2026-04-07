@@ -1,0 +1,169 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - email: string (required)
+    //   - role: string (required, 'admin' or 'operator')
+    //   - assignedPumpId: string (optional)
+    //   - name: string (optional)
+    //
+    // Collection: pumps
+    // Fields:
+    //   - name: string (required)
+    //   - location: string (required)
+    //   - owner: string (optional)
+    //   - contact: string (optional)
+    //
+    // Collection: pumps/{pumpId}/stocks
+    // Fields:
+    //   - fuelType: string (required, 'Octane', 'Petrol', 'Diesel')
+    //   - totalReceived: number (required)
+    //   - currentStock: number (required)
+    //
+    // Collection: transactions
+    // Fields:
+    //   - vehicleNumber: string (required)
+    //   - fuelType: string (required)
+    //   - quantity: number (required)
+    //   - pumpId: string (required)
+    //   - operatorId: string (required)
+    //   - timestamp: timestamp (required)
+    //
+    // Collection: vehicles
+    // Fields:
+    //   - vehicleNumber: string (required)
+    //   - totalFuelTaken: number (required)
+    //   - lastTransactionAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "op.jobayer@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isPumpOwner() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pumpOwner';
+    }
+
+    function isOperator() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'operator';
+    }
+
+    function ownsPump(pumpId) {
+      return isPumpOwner() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId == pumpId;
+    }
+
+    function isAssignedOperator(pumpId) {
+      return isOperator() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId == pumpId;
+    }
+
+    function isStaff(pumpId) {
+      return isAdmin() || ownsPump(pumpId) || isAssignedOperator(pumpId);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'pumpOwner', 'operator'] &&
+             (!('assignedPumpId' in data) || data.assignedPumpId is string || data.assignedPumpId == null) &&
+             (!('name' in data) || (data.name is string && data.name.size() < 100)) &&
+             (!('isPreAssigned' in data) || data.isPreAssigned is bool);
+    }
+
+    function isValidPump(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             data.location is string && data.location.size() > 0 && data.location.size() < 500 &&
+             (!('owner' in data) || (data.owner is string && data.owner.size() < 100)) &&
+             (!('contact' in data) || (data.contact is string && data.contact.size() < 50));
+    }
+
+    function isValidStock(data) {
+      return data.fuelType in ['Octane', 'Petrol', 'Diesel'] &&
+             data.totalReceived is number && data.totalReceived >= 0 &&
+             data.currentStock is number && data.currentStock >= 0;
+    }
+
+    function isValidTransaction(data) {
+      return data.vehicleNumber is string && data.vehicleNumber.size() > 0 && data.vehicleNumber.size() < 50 &&
+             data.fuelType in ['Octane', 'Petrol', 'Diesel'] &&
+             data.quantity is number && data.quantity > 0 &&
+             data.pumpId is string &&
+             data.operatorId == request.auth.uid &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidVehicle(data) {
+      return data.vehicleNumber is string && data.vehicleNumber.size() > 0 && data.vehicleNumber.size() < 50 &&
+             data.totalFuelTaken is number && data.totalFuelTaken >= 0 &&
+             data.lastTransactionAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isAdmin() || 
+        (isOwner(userId) && request.resource.data.role == resource.data.role) ||
+        (isPumpOwner() && resource.data.role == 'operator' && request.resource.data.role == 'operator' && request.resource.data.assignedPumpId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedPumpId)
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.token.email == userId);
+    }
+
+    match /pumps/{pumpId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidPump(request.resource.data);
+      allow update: if (isAdmin() || ownsPump(pumpId)) && isValidPump(request.resource.data);
+      allow delete: if isAdmin();
+      
+      match /stocks/{stockId} {
+        allow read: if true;
+        allow create, update: if (isAdmin() || ownsPump(pumpId)) && isValidStock(request.resource.data);
+      }
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidTransaction(request.resource.data) && isStaff(request.resource.data.pumpId);
+    }
+
+    match /vehicles/{vehicleNumber} {
+      allow read: if true;
+      allow create, update: if isAuthenticated() && isValidVehicle(request.resource.data);
+    }
+  }
+}
