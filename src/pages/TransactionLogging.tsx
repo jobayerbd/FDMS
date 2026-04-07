@@ -16,7 +16,10 @@ import {
   Activity,
   Wifi,
   WifiOff,
-  CloudUpload
+  CloudUpload,
+  Calculator,
+  Delete,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -33,6 +36,7 @@ export function TransactionLogging() {
   const [vehicleHistoryTotal, setVehicleHistoryTotal] = useState<number>(0);
   const [isCheckingHistory, setIsCheckingHistory] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isKeypadOpen, setIsKeypadOpen] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -186,6 +190,18 @@ export function TransactionLogging() {
   const selectedPump = pumps.find(p => p.id === selectedPumpId);
   const quickQuantities = [5, 10, 20, 50];
 
+  const handleKeypadPress = (val: string) => {
+    if (val === 'backspace') {
+      setForm(prev => ({ ...prev, quantity: prev.quantity.slice(0, -1) }));
+    } else if (val === '.') {
+      if (!form.quantity.includes('.')) {
+        setForm(prev => ({ ...prev, quantity: prev.quantity + '.' }));
+      }
+    } else {
+      setForm(prev => ({ ...prev, quantity: prev.quantity + val }));
+    }
+  };
+
   return (
     <div className="max-w-md mx-auto space-y-3 pb-24">
       {/* App Header - Compact */}
@@ -285,9 +301,16 @@ export function TransactionLogging() {
               placeholder="0.00"
               value={form.quantity}
               onChange={e => setForm({ ...form, quantity: e.target.value })}
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-2xl font-black text-slate-900 placeholder:text-slate-100"
+              className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none transition-all text-2xl font-black text-slate-900 placeholder:text-slate-100"
             />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 font-black text-lg">L</div>
+            <div className="absolute right-12 top-1/2 -translate-y-1/2 text-slate-300 font-black text-lg">L</div>
+            <button 
+              type="button"
+              onClick={() => setIsKeypadOpen(true)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white rounded-lg shadow-sm border border-slate-100 text-blue-600 active:scale-90 transition-transform"
+            >
+              <Calculator className="h-5 w-5" />
+            </button>
           </div>
           
           {/* Quick Presets - Compact */}
@@ -375,6 +398,57 @@ export function TransactionLogging() {
           ))}
         </div>
       </div>
+      {/* Numeric Keypad Modal */}
+      <AnimatePresence>
+        {isKeypadOpen && (
+          <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm p-0">
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="bg-white rounded-t-[2.5rem] w-full max-w-md p-6 pb-10 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Input Quantity</span>
+                  <span className="text-3xl font-black text-blue-600">{form.quantity || '0'}<span className="text-slate-300 ml-1">L</span></span>
+                </div>
+                <button 
+                  onClick={() => setIsKeypadOpen(false)}
+                  className="p-3 bg-slate-50 rounded-2xl text-slate-400 active:scale-95 transition-transform"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, '.', 0, 'backspace'].map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handleKeypadPress(key.toString())}
+                    className={cn(
+                      "h-16 rounded-2xl flex items-center justify-center text-xl font-black transition-all active:scale-95",
+                      key === 'backspace' 
+                        ? "bg-red-50 text-red-500" 
+                        : "bg-slate-50 text-slate-900 hover:bg-slate-100"
+                    )}
+                  >
+                    {key === 'backspace' ? <Delete className="h-6 w-6" /> : key}
+                  </button>
+                ))}
+              </div>
+
+              <button 
+                onClick={() => setIsKeypadOpen(false)}
+                className="w-full mt-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-base shadow-xl shadow-blue-100 active:scale-[0.98] transition-all"
+              >
+                Done
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
